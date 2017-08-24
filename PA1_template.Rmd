@@ -7,19 +7,127 @@ output:
 
 
 ## Loading and preprocessing the data
+```{r}
+activity <- read.csv(unzip("activity.zip"))
+summary(activity)
+str(activity)
+```
 
+Let's obtain clean step data:
 
+```{r}
+cl_steps <- activity$steps[!is.na(activity$steps)]
+```
 
 ## What is mean total number of steps taken per day?
 
+1. A histogram of the total number of steps taken each day:
+
+```{r}
+library(ggplot2)
+qplot(cl_steps, binwidth = diff(range(cl_steps))/100)
+qplot(cl_steps, binwidth = diff(range(cl_steps))/100)+coord_cartesian(ylim=c(0, 500))
+```
+
+And one without zeros:
+```{r}
+qplot(cl_steps, binwidth = diff(range(cl_steps))/100, xlim=c(1, 800))
+```
+
+
+```{r}
+mean(activity$steps, na.rm = TRUE)
+median(activity$steps, na.rm = TRUE)
+```
 
 
 ## What is the average daily activity pattern?
 
+```{r}
+avg <- function(intrv, df) {
+  mean(df$steps[df$interval==intrv], na.rm = TRUE)
+}
+
+ints <- unique(activity$interval)
+stats <- list(intervals=ints, avg_steps=sapply(ints, avg, activity))
+
+plot(stats$intervals, stats$avg_steps, type="l")
+```
+
+```{r}
+max_steps <- max(stats$avg_steps)
+max_int <- stats$intervals[stats$avg_steps == max_steps]
+```
+Max count of steps (`r max_steps`) is achieved on interval #`r max_int`.
 
 
 ## Imputing missing values
 
+Number of NAs:
+```{r}
+sum(is.na(activity$steps))
+```
+
+Replacing NAs with intervals averages:
+```{r}
+restored <- activity
+sum(is.na(restored$steps))
+
+nas <- is.na(activity$steps)
+
+for(i in 1:length(nas)){
+  if(nas[i]){
+    restored$steps[i] <- stats$avg_steps[stats$interval == restored$interval[i]]
+  }
+}
+
+# restored$steps[nas] <- stats$avg_steps[which(stats$interval %in% restored$interval[nas])]
+
+sum(is.na(restored$steps))
+
+qplot(steps, data = restored, binwidth = diff(range(cl_steps))/100)
+
+```
+
+
+```{r}
+mean(restored$steps)
+median(restored$steps)
+```
+
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+```{r}
+is_weekend <- function(date){
+  w <- weekdays(date)
+  w =="Saturday" || w == "Sunday"
+}
+
+restored$wtype <- sapply(restored$date, function(d){
+  factor(levels = c("weekday", "weekend"),
+            x = if(is_weekend(as.Date(d))){"weekend"} else {'weekday'})
+  })
+
+sum(restored$wtype == "weekend")
+
+sum(restored$wtype == "weekday")
+
+weekends <- restored[restored$wtype == "weekend",]
+attr(weekends, 'name') <- "Weekends"
+weekdays <- restored[restored$wtype == "weekday",]
+attr(weekdays, 'name') <- "Weekdays"
+
+par(mfrow = c(2, 1))
+
+for(df in list(weekdays, weekends)){
+  str(df)
+  ints <- unique(df$interval)
+  stats <- list(intervals=ints, avg_steps=sapply(ints, avg, df))
+  print(any(is.na(stats)))
+  plot(stats$intervals, stats$avg_steps, type="l", main=attributes(df)$name)
+}
+
+```
